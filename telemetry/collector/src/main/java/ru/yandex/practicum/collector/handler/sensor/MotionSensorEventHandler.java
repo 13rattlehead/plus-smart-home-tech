@@ -1,25 +1,50 @@
+
 package ru.yandex.practicum.collector.handler.sensor;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import ru.yandex.practicum.grpc.telemetry.event.MotionSensorProto;
+import ru.yandex.practicum.collector.dto.sensor.MotionSensorEventDto;
+import ru.yandex.practicum.collector.mapper.SensorEventMapper;
+import ru.yandex.practicum.collector.producer.KafkaEventProducer;
 import ru.yandex.practicum.grpc.telemetry.event.SensorEventProto;
+
+import java.time.Instant;
 
 @Component
 public class MotionSensorEventHandler implements SensorEventHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(MotionSensorEventHandler.class);
+    private final SensorEventMapper sensorEventMapper;
+    private final KafkaEventProducer kafkaEventProducer;
 
-    @Override
-    public SensorEventProto.PayloadCase getMessageType() {
-        return SensorEventProto.PayloadCase.MOTION_SENSOR;
+    public MotionSensorEventHandler(
+            SensorEventMapper sensorEventMapper,
+            KafkaEventProducer kafkaEventProducer
+    ) {
+        this.sensorEventMapper = sensorEventMapper;
+        this.kafkaEventProducer = kafkaEventProducer;
     }
 
     @Override
     public void handle(SensorEventProto event) {
-        MotionSensorProto sensor = event.getMotionSensor();
+        MotionSensorEventDto dto = new MotionSensorEventDto();
 
-        log.info("Получено сообщение от датчика движения: {}", sensor);
+        dto.setId(event.getId());
+        dto.setHubId(event.getHubId());
+        dto.setTimestamp(Instant.ofEpochSecond(
+                event.getTimestamp().getSeconds(),
+                event.getTimestamp().getNanos()
+        ));
+
+        dto.setLinkQuality(event.getMotionSensor().getLinkQuality());
+        dto.setMotion(event.getMotionSensor().getMotion());
+        dto.setVoltage(event.getMotionSensor().getVoltage());
+
+        kafkaEventProducer.sendSensorEvent(
+                sensorEventMapper.toAvro(dto)
+        );
+    }
+
+    @Override
+    public SensorEventProto.PayloadCase getMessageType() {
+        return SensorEventProto.PayloadCase.MOTION_SENSOR;
     }
 }

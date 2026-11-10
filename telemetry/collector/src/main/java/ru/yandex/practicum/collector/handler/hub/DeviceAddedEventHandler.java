@@ -1,15 +1,26 @@
+
 package ru.yandex.practicum.collector.handler.hub;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import ru.yandex.practicum.grpc.telemetry.event.DeviceAddedEventProto;
+import ru.yandex.practicum.collector.dto.hub.DeviceAddedEventDto;
+import ru.yandex.practicum.collector.mapper.HubEventMapper;
+import ru.yandex.practicum.collector.producer.KafkaEventProducer;
 import ru.yandex.practicum.grpc.telemetry.event.HubEventProto;
+import com.google.protobuf.Timestamp;
+
+import java.time.Instant;
 
 @Component
 public class DeviceAddedEventHandler implements HubEventHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(DeviceAddedEventHandler.class);
+    private final HubEventMapper hubEventMapper;
+    private final KafkaEventProducer kafkaEventProducer;
+
+    public DeviceAddedEventHandler(HubEventMapper hubEventMapper,
+                                   KafkaEventProducer kafkaEventProducer) {
+        this.hubEventMapper = hubEventMapper;
+        this.kafkaEventProducer = kafkaEventProducer;
+    }
 
     @Override
     public HubEventProto.PayloadCase getMessageType() {
@@ -17,8 +28,24 @@ public class DeviceAddedEventHandler implements HubEventHandler {
     }
 
     @Override
-    public void hanlde(HubEventProto event) {
-        DeviceAddedEventProto device = event.getDeviceAdded();
-        log.info("Добавлено новое устройство: {}", device);
+    public void handle(HubEventProto event) {
+        DeviceAddedEventDto dto = new DeviceAddedEventDto();
+
+        dto.setHubId(event.getId());
+
+        Timestamp timestamp = event.getTimestamp();
+        dto.setTimestamp(Instant.ofEpochSecond(
+                timestamp.getSeconds(),
+                timestamp.getNanos()
+        ));
+
+        dto.setId(event.getDeviceAdded().getId());
+        dto.setDeviceType(
+                ru.yandex.practicum.collector.dto.enums.DeviceType.valueOf(
+                        event.getDeviceAdded().getType().name()
+                )
+        );
+
+        kafkaEventProducer.sendHubEvent(hubEventMapper.toAvro(dto));
     }
 }

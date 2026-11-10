@@ -103,7 +103,7 @@ public class EventController extends CollectorControllerImplBase {
                 );
             }
 
-            handler.hanlde(request);
+            handler.handle(request);
 
             responseObserver.onNext(Empty.getDefaultInstance());
             responseObserver.onCompleted();

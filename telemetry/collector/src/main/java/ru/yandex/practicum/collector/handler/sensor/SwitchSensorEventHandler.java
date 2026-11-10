@@ -1,21 +1,44 @@
+
 package ru.yandex.practicum.collector.handler.sensor;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import ru.yandex.practicum.collector.dto.sensor.SwitchSensorEventDto;
+import ru.yandex.practicum.collector.mapper.SensorEventMapper;
+import ru.yandex.practicum.collector.producer.KafkaEventProducer;
 import ru.yandex.practicum.grpc.telemetry.event.SensorEventProto;
-import ru.yandex.practicum.grpc.telemetry.event.SwitchSensorProto;
+
+import java.time.Instant;
 
 @Component
 public class SwitchSensorEventHandler implements SensorEventHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(SwitchSensorEventHandler.class);
+    private final SensorEventMapper sensorEventMapper;
+    private final KafkaEventProducer kafkaEventProducer;
+
+    public SwitchSensorEventHandler(
+            SensorEventMapper sensorEventMapper,
+            KafkaEventProducer kafkaEventProducer
+    ) {
+        this.sensorEventMapper = sensorEventMapper;
+        this.kafkaEventProducer = kafkaEventProducer;
+    }
 
     @Override
     public void handle(SensorEventProto event) {
-        SwitchSensorProto sensor = event.getSwitchSensor();
+        SwitchSensorEventDto dto = new SwitchSensorEventDto();
 
-        log.info("Получено сообщения от свитч-датчика: {}", sensor);
+        dto.setId(event.getId());
+        dto.setHubId(event.getHubId());
+        dto.setTimestamp(Instant.ofEpochSecond(
+                event.getTimestamp().getSeconds(),
+                event.getTimestamp().getNanos()
+        ));
+
+        dto.setState(event.getSwitchSensor().getState());
+
+        kafkaEventProducer.sendSensorEvent(
+                sensorEventMapper.toAvro(dto)
+        );
     }
 
     @Override

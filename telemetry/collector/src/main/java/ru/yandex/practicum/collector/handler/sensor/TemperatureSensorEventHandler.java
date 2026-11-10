@@ -1,26 +1,49 @@
+
 package ru.yandex.practicum.collector.handler.sensor;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import ru.yandex.practicum.collector.dto.sensor.TemperatureSensorEventDto;
+import ru.yandex.practicum.collector.mapper.SensorEventMapper;
+import ru.yandex.practicum.collector.producer.KafkaEventProducer;
 import ru.yandex.practicum.grpc.telemetry.event.SensorEventProto;
-import ru.yandex.practicum.grpc.telemetry.event.TemperatureSensorProto;
+
+import java.time.Instant;
 
 @Component
 public class TemperatureSensorEventHandler implements SensorEventHandler {
 
-    private static final Logger log =
-            LoggerFactory.getLogger(TemperatureSensorEventHandler.class);
+    private final SensorEventMapper sensorEventMapper;
+    private final KafkaEventProducer kafkaEventProducer;
 
-    @Override
-    public SensorEventProto.PayloadCase getMessageType() {
-        return SensorEventProto.PayloadCase.TEMPERATURE_SENSOR;
+    public TemperatureSensorEventHandler(
+            SensorEventMapper sensorEventMapper,
+            KafkaEventProducer kafkaEventProducer
+    ) {
+        this.sensorEventMapper = sensorEventMapper;
+        this.kafkaEventProducer = kafkaEventProducer;
     }
 
     @Override
     public void handle(SensorEventProto event) {
-        TemperatureSensorProto sensor = event.getTemperatureSensor();
+        TemperatureSensorEventDto dto = new TemperatureSensorEventDto();
 
-        log.info("Получено сообщение от датчика температуры: {}", sensor);
+        dto.setId(event.getId());
+        dto.setHubId(event.getHubId());
+        dto.setTimestamp(Instant.ofEpochSecond(
+                event.getTimestamp().getSeconds(),
+                event.getTimestamp().getNanos()
+        ));
+
+        dto.setTemperatureC(event.getTemperatureSensor().getTemperatureC());
+        dto.setTemperatureF(event.getTemperatureSensor().getTemperatureF());
+
+        kafkaEventProducer.sendSensorEvent(
+                sensorEventMapper.toAvro(dto)
+        );
+    }
+
+    @Override
+    public SensorEventProto.PayloadCase getMessageType() {
+        return SensorEventProto.PayloadCase.TEMPERATURE_SENSOR;
     }
 }

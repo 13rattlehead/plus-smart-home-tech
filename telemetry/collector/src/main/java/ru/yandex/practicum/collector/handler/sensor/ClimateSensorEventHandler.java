@@ -1,25 +1,50 @@
+
 package ru.yandex.practicum.collector.handler.sensor;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import ru.yandex.practicum.grpc.telemetry.event.ClimateSensorProto;
+import ru.yandex.practicum.collector.dto.sensor.ClimateSensorEventDto;
+import ru.yandex.practicum.collector.mapper.SensorEventMapper;
+import ru.yandex.practicum.collector.producer.KafkaEventProducer;
 import ru.yandex.practicum.grpc.telemetry.event.SensorEventProto;
+
+import java.time.Instant;
 
 @Component
 public class ClimateSensorEventHandler implements SensorEventHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(ClimateSensorEventHandler.class);
+    private final SensorEventMapper sensorEventMapper;
+    private final KafkaEventProducer kafkaEventProducer;
 
-    @Override
-    public SensorEventProto.PayloadCase getMessageType() {
-        return SensorEventProto.PayloadCase.CLIMATE_SENSOR;
+    public ClimateSensorEventHandler(
+            SensorEventMapper sensorEventMapper,
+            KafkaEventProducer kafkaEventProducer
+    ) {
+        this.sensorEventMapper = sensorEventMapper;
+        this.kafkaEventProducer = kafkaEventProducer;
     }
 
     @Override
     public void handle(SensorEventProto event) {
-        ClimateSensorProto sensor = event.getClimateSensor();
+        ClimateSensorEventDto dto = new ClimateSensorEventDto();
 
-        log.info("Получено сообщение от датчика климата: {}", sensor);
+        dto.setId(event.getId());
+        dto.setHubId(event.getHubId());
+        dto.setTimestamp(Instant.ofEpochSecond(
+                event.getTimestamp().getSeconds(),
+                event.getTimestamp().getNanos()
+        ));
+
+        dto.setTemperatureC(event.getClimateSensor().getTemperatureC());
+        dto.setHumidity(event.getClimateSensor().getHumidity());
+        dto.setCo2Level(event.getClimateSensor().getCo2Level());
+
+        kafkaEventProducer.sendSensorEvent(
+                sensorEventMapper.toAvro(dto)
+        );
+    }
+
+    @Override
+    public SensorEventProto.PayloadCase getMessageType() {
+        return SensorEventProto.PayloadCase.CLIMATE_SENSOR;
     }
 }

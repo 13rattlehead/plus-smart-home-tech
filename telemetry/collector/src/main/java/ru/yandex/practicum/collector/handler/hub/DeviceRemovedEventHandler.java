@@ -17,7 +17,7 @@ public class DeviceRemovedEventHandler implements HubEventHandler {
     }
 
     @Override
-    public void hanlde(HubEventProto event) {
+    public void handle(HubEventProto event) {
         DeviceRemovedEventProto device = event.getDeviceRemoved();
         log.info("Удалено устройство: {}", device);
     }

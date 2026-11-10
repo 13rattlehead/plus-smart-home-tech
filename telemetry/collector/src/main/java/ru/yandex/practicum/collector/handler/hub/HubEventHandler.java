@@ -6,5 +6,5 @@ public interface HubEventHandler {
 
     HubEventProto.PayloadCase getMessageType();
 
-    void hanlde(HubEventProto event);
+    void handle(HubEventProto event);
 }

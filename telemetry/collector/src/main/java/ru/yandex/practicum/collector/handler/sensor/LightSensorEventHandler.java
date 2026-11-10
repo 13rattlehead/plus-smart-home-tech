@@ -1,15 +1,26 @@
 package ru.yandex.practicum.collector.handler.sensor;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import ru.yandex.practicum.grpc.telemetry.event.LightSensorProto;
+import ru.yandex.practicum.collector.dto.sensor.LightSensorEventDto;
+import ru.yandex.practicum.collector.mapper.SensorEventMapper;
+import ru.yandex.practicum.collector.producer.KafkaEventProducer;
 import ru.yandex.practicum.grpc.telemetry.event.SensorEventProto;
+
+import java.time.Instant;
 
 @Component
 public class LightSensorEventHandler implements SensorEventHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(LightSensorEventHandler.class);
+    private final SensorEventMapper sensorEventMapper;
+    private final KafkaEventProducer kafkaEventProducer;
+
+    public LightSensorEventHandler(
+            SensorEventMapper sensorEventMapper,
+            KafkaEventProducer kafkaEventProducer
+    ) {
+        this.sensorEventMapper = sensorEventMapper;
+        this.kafkaEventProducer = kafkaEventProducer;
+    }
 
     @Override
     public SensorEventProto.PayloadCase getMessageType() {
@@ -18,8 +29,20 @@ public class LightSensorEventHandler implements SensorEventHandler {
 
     @Override
     public void handle(SensorEventProto event) {
-        LightSensorProto sensor = event.getLightSensor();
+        LightSensorEventDto dto = new LightSensorEventDto();
 
-        log.info("Получено сообщение от датчка света: {}", sensor);
+        dto.setId(event.getId());
+        dto.setHubId(event.getHubId());
+        dto.setTimestamp(Instant.ofEpochSecond(
+                event.getTimestamp().getSeconds(),
+                event.getTimestamp().getNanos()
+        ));
+
+        dto.setLinkQuality(event.getLightSensor().getLinkQuality());
+        dto.setLuminosity(event.getLightSensor().getLuminosity());
+
+        kafkaEventProducer.sendSensorEvent(
+                sensorEventMapper.toAvro(dto)
+        );
     }
 }

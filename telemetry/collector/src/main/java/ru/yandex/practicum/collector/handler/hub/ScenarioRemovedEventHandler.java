@@ -17,7 +17,7 @@ public class ScenarioRemovedEventHandler implements HubEventHandler {
     }
 
     @Override
-    public void hanlde(HubEventProto event) {
+    public void handle(HubEventProto event) {
         ScenarioRemovedEventProto scenario = event.getScenarioRemoved();
         log.info("Удалён сценарий: {}", scenario);
     }
