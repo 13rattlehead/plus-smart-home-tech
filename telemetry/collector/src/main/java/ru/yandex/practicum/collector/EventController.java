@@ -1,4 +1,4 @@
-package telemetry.collector;
+package ru.yandex.practicum.collector;
 
 import com.google.protobuf.Empty;
 import io.grpc.Status;
@@ -8,8 +8,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ru.yandex.practicum.grpc.telemetry.event.*;
 import ru.yandex.practicum.grpc.telemetry.event.CollectorControllerGrpc.CollectorControllerImplBase;
-import telemetry.collector.handler.hub.HubEventHandler;
-import telemetry.collector.handler.sensor.SensorEventHandler;
+import ru.yandex.practicum.collector.handler.hub.HubEventHandler;
+import ru.yandex.practicum.collector.handler.sensor.SensorEventHandler;
 
 import java.util.Map;
 import java.util.Set;
@@ -27,11 +27,31 @@ public class EventController extends CollectorControllerImplBase {
 
     public EventController(Set<SensorEventHandler> sensorEventHandlers,
                            Set<HubEventHandler> hubEventHandlers) {
+
+        // Проверяем, сколько обработчиков датчиков передал Spring
+        if (sensorEventHandlers.size() != 5) {
+            throw new IllegalStateException(
+                    "Ожидалось 5 обработчиков датчиков, получено: "
+                            + sensorEventHandlers.size()
+            );
+        }
+
+        // Проверяем, сколько обработчиков хаба передал Spring
+        if (hubEventHandlers.size() != 4) {
+            throw new IllegalStateException(
+                    "Ожидалось 4 обработчика хаба, получено: "
+                            + hubEventHandlers.size()
+            );
+        }
+
+        // Формируем Map обработчиков датчиков
         this.sensorEventHandlers = sensorEventHandlers.stream()
                 .collect(Collectors.toMap(
                         SensorEventHandler::getMessageType,
                         Function.identity()
                 ));
+
+        // Формируем Map обработчиков событий хаба
         this.hubEventHandlers = hubEventHandlers.stream()
                 .collect(Collectors.toMap(
                         HubEventHandler::getMessageType,
