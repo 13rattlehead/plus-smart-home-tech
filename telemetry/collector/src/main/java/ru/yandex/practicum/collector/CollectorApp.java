@@ -3,7 +3,10 @@ package ru.yandex.practicum.collector;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {
+        "ru.yandex.practicum.collector",
+        "telemetry.collector"
+})
 public class CollectorApp {
 
     public static void main(String[] args) {
