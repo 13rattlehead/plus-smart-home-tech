@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "scenario_conditions")
+@Table(name = "conditions")
 @Getter @Setter @NoArgsConstructor
 public class Condition {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
