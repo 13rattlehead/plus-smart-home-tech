@@ -35,7 +35,14 @@ public class SnapshotProcessor {
             consumer.subscribe(List.of(topic));
             while (true) {
                 var records = consumer.poll(Duration.ofSeconds(1));
-                records.forEach(record -> process(record.value()));
+                records.forEach(record -> {
+                    try {
+                        process(record.value());
+                    } catch (Exception e) {
+                        // A malformed message or a transient gRPC failure must not stop the consumer.
+                        log.error("Could not process snapshot for hub {}", record.value().getHubId(), e);
+                    }
+                });
                 if (!records.isEmpty()) consumer.commitSync();
             }
         } catch (WakeupException ignored) {
