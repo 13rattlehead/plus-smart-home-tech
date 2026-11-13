@@ -77,7 +77,9 @@ message DeviceActionProto {
 
 message DeviceActionRequest {
   string hub_id = 1;
-  repeated DeviceActionProto actions = 2;
+  string scenario_name = 2;
+  DeviceActionProto action = 3;
+  google.protobuf.Timestamp timestamp = 4;
 }
 
 message ScenarioAddedEventProto {

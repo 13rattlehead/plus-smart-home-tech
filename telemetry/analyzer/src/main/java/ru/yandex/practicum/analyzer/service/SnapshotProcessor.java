@@ -3,6 +3,7 @@ package ru.yandex.practicum.analyzer.service;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.client.inject.GrpcClient;
+import com.google.protobuf.Timestamp;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.errors.WakeupException;
 import org.springframework.beans.factory.annotation.Value;
@@ -56,7 +57,9 @@ public class SnapshotProcessor {
         List<Scenario> matching = scenarios.findByHubId(snapshot.getHubId()).stream()
                 .filter(scenario -> scenario.getConditions().stream().allMatch(c -> matches(snapshot, c)))
                 .toList();
-        for (Scenario scenario : matching) send(snapshot.getHubId(), scenario.getActions().stream().toList());
+        for (Scenario scenario : matching) {
+            scenario.getActions().forEach(action -> send(snapshot.getHubId(), scenario.getName(), action, snapshot.getTimestamp()));
+        }
     }
     private boolean matches(SensorsSnapshotAvro snapshot, ScenarioCondition link) {
         Condition condition = link.getCondition();
@@ -84,16 +87,22 @@ public class SnapshotProcessor {
             case HUMIDITY -> data instanceof ClimateSensorAvro x ? x.getHumidity() : null;
         };
     }
-    private void send(String hubId, List<ScenarioAction> actions) {
-        DeviceActionRequest.Builder request = DeviceActionRequest.newBuilder().setHubId(hubId);
-        actions.forEach(link -> {
-            Action action = link.getAction();
-            DeviceActionProto.Builder item = DeviceActionProto.newBuilder().setSensorId(link.getSensor().getId())
-                    .setType(ru.yandex.practicum.grpc.telemetry.event.ActionTypeProto.valueOf(action.getType().name()));
-            if (action.getValue() != null) item.setValue(action.getValue());
-            request.addActions(item);
-        });
-        hubRouter.handleDeviceAction(request.build());
+    private void send(String hubId, String scenarioName, ScenarioAction link, java.time.Instant eventTime) {
+        Action action = link.getAction();
+        DeviceActionProto.Builder item = DeviceActionProto.newBuilder().setSensorId(link.getSensor().getId())
+                .setType(ru.yandex.practicum.grpc.telemetry.event.ActionTypeProto.valueOf(action.getType().name()));
+        if (action.getValue() != null) item.setValue(action.getValue());
+
+        Timestamp timestamp = Timestamp.newBuilder()
+                .setSeconds(eventTime.getEpochSecond())
+                .setNanos(eventTime.getNano())
+                .build();
+        hubRouter.handleDeviceAction(DeviceActionRequest.newBuilder()
+                .setHubId(hubId)
+                .setScenarioName(scenarioName)
+                .setAction(item)
+                .setTimestamp(timestamp)
+                .build());
     }
     @PreDestroy public void stop() { consumer.wakeup(); }
 }
