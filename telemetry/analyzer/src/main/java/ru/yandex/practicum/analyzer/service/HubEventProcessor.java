@@ -19,11 +19,15 @@ public class HubEventProcessor implements Runnable {
     private final KafkaConsumer<String, HubEventAvro> consumer;
     private final SensorRepository sensors;
     private final ScenarioRepository scenarios;
+    private final ConditionRepository conditions;
+    private final ActionRepository actions;
     private final String topic;
 
     public HubEventProcessor(KafkaConsumer<String, HubEventAvro> consumer, SensorRepository sensors,
-                             ScenarioRepository scenarios, @Value("${analyzer.kafka.topics.hubs}") String topic) {
-        this.consumer = consumer; this.sensors = sensors; this.scenarios = scenarios; this.topic = topic;
+                             ScenarioRepository scenarios, ConditionRepository conditions, ActionRepository actions,
+                             @Value("${analyzer.kafka.topics.hubs}") String topic) {
+        this.consumer = consumer; this.sensors = sensors; this.scenarios = scenarios;
+        this.conditions = conditions; this.actions = actions; this.topic = topic;
     }
 
     @Override public void run() {
@@ -43,28 +47,38 @@ public class HubEventProcessor implements Runnable {
         Object payload = event.getPayload();
         if (payload instanceof DeviceAddedEventAvro added) {
             sensors.findByIdAndHubId(added.getId(), event.getHubId())
-                    .orElseGet(() -> sensors.save(new Sensor(added.getId(), event.getHubId(), DeviceType.valueOf(added.getType().name()))));
+                    .orElseGet(() -> sensors.save(new Sensor(added.getId(), event.getHubId())));
         } else if (payload instanceof DeviceRemovedEventAvro removed) {
             sensors.findByIdAndHubId(removed.getId(), event.getHubId()).ifPresent(sensors::delete);
         } else if (payload instanceof ScenarioAddedEventAvro added) {
             Scenario scenario = scenarios.findByHubIdAndName(event.getHubId(), added.getName())
                     .orElseGet(() -> new Scenario(event.getHubId(), added.getName()));
             scenario.getConditions().clear();
-            scenario.getConditions().addAll(added.getConditions().stream().map(this::condition).toList());
             scenario.getActions().clear();
-            scenario.getActions().addAll(added.getActions().stream().map(this::action).toList());
-            scenarios.save(scenario);
+            scenario = scenarios.saveAndFlush(scenario);
+            Scenario finalScenario = scenario;
+            added.getConditions().forEach(value -> sensors.findByIdAndHubId(value.getSensorId(), event.getHubId()).ifPresent(sensor -> {
+                Condition condition = conditions.save(condition(value));
+                finalScenario.getConditions().add(new ScenarioCondition(finalScenario, sensor, condition));
+            }));
+            added.getActions().forEach(value -> sensors.findByIdAndHubId(value.getSensorId(), event.getHubId()).ifPresent(sensor -> {
+                Action action = actions.save(action(value));
+                finalScenario.getActions().add(new ScenarioAction(finalScenario, sensor, action));
+            }));
+            scenarios.save(finalScenario);
         } else if (payload instanceof ScenarioRemovedEventAvro removed) {
             scenarios.findByHubIdAndName(event.getHubId(), removed.getName()).ifPresent(scenarios::delete);
         }
     }
 
     private Condition condition(ScenarioConditionAvro value) {
-        return new Condition(value.getSensorId(), ConditionType.valueOf(value.getType().name()),
-                ConditionOperation.valueOf(value.getOperation().name()), String.valueOf(value.getValue()));
+        Object rawValue = value.getValue();
+        int conditionValue = rawValue instanceof Boolean bool ? (bool ? 1 : 0) : (Integer) rawValue;
+        return new Condition(ConditionType.valueOf(value.getType().name()),
+                ConditionOperation.valueOf(value.getOperation().name()), conditionValue);
     }
     private Action action(DeviceActionAvro value) {
-        return new Action(value.getSensorId(), ActionType.valueOf(value.getType().name()), (Integer) value.getValue());
+        return new Action(ActionType.valueOf(value.getType().name()), (Integer) value.getValue());
     }
     @PreDestroy public void stop() { consumer.wakeup(); }
 }

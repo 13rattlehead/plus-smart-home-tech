@@ -9,5 +9,5 @@ import lombok.*;
 public class Sensor {
     @Id private String id;
     @Column(nullable = false) private String hubId;
-    @Enumerated(EnumType.STRING) @Column(nullable = false) private DeviceType type;
+    // The supplied schema keeps only the sensor-to-hub relation. Device type is carried by Kafka events.
 }

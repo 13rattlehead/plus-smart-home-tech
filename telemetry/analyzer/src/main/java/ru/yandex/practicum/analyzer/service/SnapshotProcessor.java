@@ -55,19 +55,19 @@ public class SnapshotProcessor {
         if (snapshot == null) return;
         List<Scenario> matching = scenarios.findByHubId(snapshot.getHubId()).stream()
                 .filter(scenario -> scenario.getConditions().stream().allMatch(c -> matches(snapshot, c)))
-                .filter(scenario -> sensors.existsByIdInAndHubId(scenario.getActions().stream().map(Action::getSensorId).toList(), snapshot.getHubId()))
                 .toList();
-        for (Scenario scenario : matching) send(snapshot.getHubId(), scenario.getActions());
+        for (Scenario scenario : matching) send(snapshot.getHubId(), scenario.getActions().stream().toList());
     }
-    private boolean matches(SensorsSnapshotAvro snapshot, Condition condition) {
-        SensorStateAvro state = snapshot.getSensorsState().get(condition.getSensorId());
+    private boolean matches(SensorsSnapshotAvro snapshot, ScenarioCondition link) {
+        Condition condition = link.getCondition();
+        SensorStateAvro state = snapshot.getSensorsState().get(link.getSensor().getId());
         if (state == null) return false;
         Object actual = value(state.getData(), condition.getType());
         if (actual == null) return false;
-        if (actual instanceof Boolean bool) return condition.getOperation() == ConditionOperation.EQUALS && bool == Boolean.parseBoolean(condition.getValue());
+        if (actual instanceof Boolean bool) return condition.getOperation() == ConditionOperation.EQUALS && bool == (condition.getValue() == 1);
         int left = (Integer) actual;
         int right;
-        try { right = Integer.parseInt(condition.getValue()); } catch (NumberFormatException e) { return false; }
+        right = condition.getValue();
         return switch (condition.getOperation()) {
             case EQUALS -> left == right;
             case GREATER_THAN -> left > right;
@@ -84,10 +84,11 @@ public class SnapshotProcessor {
             case HUMIDITY -> data instanceof ClimateSensorAvro x ? x.getHumidity() : null;
         };
     }
-    private void send(String hubId, List<Action> actions) {
+    private void send(String hubId, List<ScenarioAction> actions) {
         DeviceActionRequest.Builder request = DeviceActionRequest.newBuilder().setHubId(hubId);
-        actions.forEach(action -> {
-            DeviceActionProto.Builder item = DeviceActionProto.newBuilder().setSensorId(action.getSensorId())
+        actions.forEach(link -> {
+            Action action = link.getAction();
+            DeviceActionProto.Builder item = DeviceActionProto.newBuilder().setSensorId(link.getSensor().getId())
                     .setType(ru.yandex.practicum.grpc.telemetry.event.ActionTypeProto.valueOf(action.getType().name()));
             if (action.getValue() != null) item.setValue(action.getValue());
             request.addActions(item);
